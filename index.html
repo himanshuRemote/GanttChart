@@ -38,6 +38,16 @@
         
             <v-divider></v-divider>
 
+            <!-- Gantt Chart List -->
+            <v-list-item v-for="(gantt, i) in gantts" :key="'nav-gantt-' + i" link @click="scrollToGantt(i)">
+              <v-list-item-action><v-icon>mdi-chart-gantt</v-icon></v-list-item-action>
+              <v-list-item-content>
+                <v-list-item-title>{{ gantt.ganttChartName || ('Gantt Chart ' + (i+1)) }}</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+
+            <v-divider></v-divider>
+
             <v-list-item link @click="openPrivacyPolicy">
               <v-list-item-action><v-icon>mdi-security</v-icon></v-list-item-action>
               <v-list-item-content><v-list-item-title>Privacy policy</v-list-item-title></v-list-item-content>
@@ -115,20 +125,22 @@
             Powered by <span style="cursor:pointer" @click="openSite('//vuejs.org/')">Vue</span> and <span style="cursor:pointer" @click="openSite('//vuetifyjs.com/')">Vuetify</span>, created by <span style="cursor:pointer" @click="openSite('//ricwtk.github.io')">R.ich.ard</span>
           </v-col>
         </v-footer>
-      </v-app>
-    </div>
 
-    <!-- Custom Export Reminder Modal -->
-    <div id="exportReminderModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-      <div style="background:white; padding:2rem; border-radius:8px; max-width:90vw; text-align:center;">
-        <h2>Reminder</h2>
-        <p>You have unsaved changes. Please export your data before leaving!</p>
-        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1.5rem;">
-          <button id="exportModalExportBtn" style="background:#009688;color:#fff;border:none;padding:0.75rem 1.5rem;border-radius:4px;font-weight:600;cursor:pointer;">Export Now</button>
-          <button id="exportModalLeaveBtn" style="background:#B2DFDB;color:#333;border:none;padding:0.75rem 1.5rem;border-radius:4px;font-weight:600;cursor:pointer;">Leave Anyway</button>
-          <button id="exportModalCancelBtn" style="background:#616161;color:#fff;border:none;padding:0.75rem 1.5rem;border-radius:4px;font-weight:600;cursor:pointer;">Cancel</button>
-        </div>
-      </div>
+        <v-dialog v-model="exportReminderDialog" persistent max-width="400px">
+          <v-card>
+            <v-card-title class="headline">Reminder</v-card-title>
+            <v-card-text>
+              You have unsaved changes. Please export your data before leaving!
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn color="primary" @click="handleExportReminder('export')" depressed>Export Now</v-btn>
+              <v-btn color="secondary" @click="handleExportReminder('leave')" depressed>Leave Anyway</v-btn>
+              <v-btn color="grey darken-2" dark @click="handleExportReminder('cancel')" depressed>Cancel</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+      </v-app>
     </div>
 
     <template id="gantt-chart-list-item">
@@ -225,7 +237,10 @@
                           <v-col cols="auto"></v-col>
                         </v-row>
                       </v-col>
-                      <v-card class="d-flex align-self-center" outlined tile height="80%" :min-width="getBarWidth(taskId, 'planned') + 'px'" style="position:absolute;" :style="{left: getDatePos(taskId, 'planned')+'px', 'background-color': colorList[(taskId[taskId.length-1])%colorList.length]}"></v-card>
+                      <!-- Planned bar -->
+                      <v-card class="d-flex align-self-center" outlined tile height="80%" :min-width="getBarWidth(taskId, 'planned') + 'px'" style="position:absolute;" :style="{left: getDatePos(taskId, 'planned')+'px', 'background-color': colorList[(taskId[taskId.length-1])%colorList.length], opacity: 0.7}"></v-card>
+                      <!-- Actual bar -->
+                      <v-card v-if="getBarWidth(taskId, 'actual') > 0" class="d-flex align-self-center" outlined tile height="40%" :min-width="getBarWidth(taskId, 'actual') + 'px'" style="position:absolute;" :style="{left: getDatePos(taskId, 'actual')+'px', 'background-color': '#607D8B', opacity: 0.9, top: '40%'}"></v-card>
                     </v-row>    
                   </v-col>
                 </v-row>
@@ -233,15 +248,6 @@
             </v-row>
           </v-col>
         </v-row>
-        
-        <template v-if="tasks.length > 0">
-          <v-row no-gutters class="pt-2">
-            <v-col class="font-weight-black">Descriptions</v-col>
-          </v-row>
-          <v-row no-gutters class="pt-2">
-            <task-description-list :task-list="tasks"></task-description-list>
-          </v-row>
-        </template>
       </v-container>
     </template>
 
@@ -420,60 +426,74 @@
                 <v-row no-gutters class="mb-4"><v-col><v-textarea outlined hide-details v-model="details.description" label="Task description"></v-textarea></v-col></v-row>
                 <v-row no-gutters class="mb-4">
                   <v-col>
-                    <v-menu
-                      ref="planned"
-                      v-model="plannedMenu"
-                      :close-on-content-click="false"
-                      :return-value.sync="details.planned"
-                      transition="scale-transition"
-                      offset-y
-                      min-width="290px"
-                    >
-                      <template v-slot:activator="{ on }">
-                        <v-text-field
-                          hide-details
-                          prepend-icon="mdi-calendar"
-                          v-model="plannedText"
-                          label="Planned date"
-                          readonly
-                          v-on="on"
-                        ></v-text-field>
-                      </template>
-                      <v-date-picker v-model="details.planned" range no-title scrollable>
-                        <v-spacer></v-spacer>
-                        <v-btn text @click="$refs.planned.save(details.planned)">OK</v-btn>
-                        <v-btn text @click="plannedMenu = false">Cancel</v-btn>
-                      </v-date-picker>
-                    </v-menu>
+                    <v-row no-gutters align="center">
+                      <v-col>
+                        <v-menu
+                          ref="planned"
+                          v-model="plannedMenu"
+                          :close-on-content-click="false"
+                          :return-value.sync="details.planned"
+                          transition="scale-transition"
+                          offset-y
+                          min-width="290px"
+                        >
+                          <template v-slot:activator="{ on }">
+                            <v-text-field
+                              hide-details
+                              prepend-icon="mdi-calendar"
+                              v-model="plannedText"
+                              label="Planned date"
+                              readonly
+                              v-on="on"
+                            ></v-text-field>
+                          </template>
+                          <v-date-picker v-model="details.planned" range no-title scrollable>
+                            <v-spacer></v-spacer>
+                            <v-btn text @click="$refs.planned.save(details.planned)">OK</v-btn>
+                            <v-btn text @click="plannedMenu = false">Cancel</v-btn>
+                          </v-date-picker>
+                        </v-menu>
+                      </v-col>
+                      <v-col cols="auto">
+                        <v-btn x-small text color="red" class="ml-2" @click="details.planned = ['', '']">Clear</v-btn>
+                      </v-col>
+                    </v-row>
                   </v-col>
                 </v-row>
                 <v-row no-gutters class="mb-4">
                   <v-col>
-                    <v-menu
-                      ref="actual"
-                      v-model="actualMenu"
-                      :close-on-content-click="false"
-                      :return-value.sync="details.actual"
-                      transition="scale-transition"
-                      offset-y
-                      min-width="290px"
-                    >
-                      <template v-slot:activator="{ on }">
-                        <v-text-field
-                          hide-details
-                          prepend-icon="mdi-calendar"
-                          v-model="actualText"
-                          label="Actual date"
-                          readonly
-                          v-on="on"
-                        ></v-text-field>
-                      </template>
-                      <v-date-picker v-model="details.actual" range no-title scrollable>
-                        <v-spacer></v-spacer>
-                        <v-btn text @click="$refs.actual.save(details.actual)">OK</v-btn>
-                        <v-btn text @click="actualMenu = false">Cancel</v-btn>
-                      </v-date-picker>
-                    </v-menu>
+                    <v-row no-gutters align="center">
+                      <v-col>
+                        <v-menu
+                          ref="actual"
+                          v-model="actualMenu"
+                          :close-on-content-click="false"
+                          :return-value.sync="details.actual"
+                          transition="scale-transition"
+                          offset-y
+                          min-width="290px"
+                        >
+                          <template v-slot:activator="{ on }">
+                            <v-text-field
+                              hide-details
+                              prepend-icon="mdi-calendar"
+                              v-model="actualText"
+                              label="Actual date"
+                              readonly
+                              v-on="on"
+                            ></v-text-field>
+                          </template>
+                          <v-date-picker v-model="details.actual" range no-title scrollable>
+                            <v-spacer></v-spacer>
+                            <v-btn text @click="$refs.actual.save(details.actual)">OK</v-btn>
+                            <v-btn text @click="actualMenu = false">Cancel</v-btn>
+                          </v-date-picker>
+                        </v-menu>
+                      </v-col>
+                      <v-col cols="auto">
+                        <v-btn x-small text color="red" class="ml-2" @click="details.actual = ['', '']">Clear</v-btn>
+                      </v-col>
+                    </v-row>
                   </v-col>
                 </v-row>
                 <v-row no-gutters><v-col class="font-weight-black">Subtasks</v-col></v-row>
@@ -504,28 +524,6 @@
           </v-dialog>
         </v-col>
       </v-row>
-    </template>
-
-    <template id="task-description-list">
-      <v-expansion-panels accordion multiple>
-        <task-description v-for="t,i in taskList" :key="i" :task="t" :task-number="i+1"></task-description>
-      </v-expansion-panels>
-    </template>
-
-    <template id="task-description">
-      <v-expansion-panel>
-        <v-expansion-panel-header>
-          <v-row no-gutters>
-            <v-col cols="auto" class="pr-2">{{ taskNumber }}</v-col>
-            <v-col cols="auto" class="pr-2">|</v-col>
-            <v-col>{{ task.name }}</v-col>
-          </v-row>
-        </v-expansion-panel-header>
-        <v-expansion-panel-content v-if="task.subtasks.length > 0 || task.description !== ''">
-          <v-row no-gutters><v-col>{{ task.description }}</v-col></v-row>
-          <v-row no-gutters v-if="task.subtasks" class="pt-3"><v-col><task-description-list :task-list="task.subtasks"></task-description-list></v-col></v-row>
-        </v-expansion-panel-content>
-      </v-expansion-panel>
     </template>
 
     <template id="help-dialog">
@@ -598,29 +596,6 @@
               isReloading = true;
           }
       });
-
-      function showExportReminderModal(callback) {
-          const modal = document.getElementById('exportReminderModal');
-          modal.style.display = 'flex';
-          isModalActive = true;
-          // Button handlers
-          document.getElementById('exportModalExportBtn').onclick = function() {
-              if (window.vm && window.vm.exportJSON) window.vm.exportJSON();
-              modal.style.display = 'none';
-              isModalActive = false;
-              callback('export');
-          };
-          document.getElementById('exportModalLeaveBtn').onclick = function() {
-              modal.style.display = 'none';
-              isModalActive = false;
-              callback('leave');
-          };
-          document.getElementById('exportModalCancelBtn').onclick = function() {
-              modal.style.display = 'none';
-              isModalActive = false;
-              callback('cancel');
-          };
-      }
 
       let closeAttempted = false;
       window.addEventListener('beforeunload', function (e) {
@@ -776,8 +751,8 @@
             this.tasks.push({
               name: 'Task ' + (this.tasks.length + 1),
               description: '',
-              planned: [startDay, endDay],
-              actual: [startDay, endDay],
+              planned: [],
+              actual: [],
               subtasks: [],
               collapsed: true
             });
@@ -807,7 +782,8 @@
               if (i == 0) { task = this.tasks[id]; }
               else { task = task.subtasks[id]; }
             });
-            let date = task[key][0];
+            let date = (task[key] && task[key][0]) ? task[key][0] : null;
+            if (!date) return 0;
             let curDate = (new Date(date).valueOf());
             return (curDate - this.minDate) / (this.maxDate - this.minDate) * (this.settings.columnWidth*this.numberOfColumn);
           },
@@ -818,6 +794,7 @@
               else { task = task.subtasks[id]; }
             });
             let dateRange = task[key];
+            if (!dateRange || !dateRange[0] || !dateRange[1]) return 0;
             let curRange = [(new Date(dateRange[0])).valueOf(), (new Date(dateRange[1])).valueOf() + oneday];
             return (curRange[1] - curRange[0]) / (this.maxDate - this.minDate) * (this.settings.columnWidth*this.numberOfColumn);
           },
@@ -1067,8 +1044,14 @@
           };
         },
         computed: {
-          plannedText: function () { return this.details.planned[0] + ' ~ ' + this.details.planned[1]; },
-          actualText: function () { return this.details.actual[0] + ' ~ ' + this.details.actual[1]; },
+          plannedText: function () {
+            if (!this.details.planned || !this.details.planned[0]) return '';
+            return this.details.planned[0] + ' ~ ' + this.details.planned[1];
+          },
+          actualText: function () {
+            if (!this.details.actual || !this.details.actual[0]) return '';
+            return this.details.actual[0] + ' ~ ' + this.details.actual[1];
+          },
           additionalClass: function () { return this.dragover ? ['teal', 'lighten-5'] : [] }
         },
         methods: {
@@ -1104,18 +1087,6 @@
             else { this.details.subtasks.splice(thisId-1,0,taskToMove); }
           }
         }
-      });
-
-      Vue.component('task-description-list', {
-        template: '#task-description-list',
-        props: ['taskList'],
-        data: function () { return { }; }
-      });
-
-      Vue.component('task-description', {
-        template: '#task-description',
-        props: ['task', 'taskNumber'],
-        data: function () { return {}; }
       });
 
       Vue.component('help-dialog', {
@@ -1168,7 +1139,9 @@
           blockingLoading: false,
           blockingLoadingText: "loading text goes here",
           contentChanged: false,
-          currentFile: { name: "" }
+          currentFile: { name: "" },
+          exportReminderDialog: false,
+          exportReminderCallback: null
         },
         computed: {
           fileNameForDisplay: function () {
@@ -1336,6 +1309,22 @@
           saveToLocalStorage: function () {
             saveGanttDataToLocalStorage(this.gantts);
             window.ganttDataUnsaved = true;
+          },
+          showExportReminderModal: function(callback) {
+            this.exportReminderCallback = callback;
+            this.exportReminderDialog = true;
+          },
+          handleExportReminder: function(action) {
+            this.exportReminderDialog = false;
+            if (this.exportReminderCallback) this.exportReminderCallback(action);
+          },
+          scrollToGantt: function(i) {
+            this.$nextTick(() => {
+              const el = document.getElementById('gc' + i);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+              }
+            });
           }
         },
         watch: {
@@ -1357,7 +1346,11 @@
         }
       });
 
-      
+      window.showExportReminderModal = function(callback) {
+        if (window.vm && window.vm.showExportReminderModal) {
+          window.vm.showExportReminderModal(callback);
+        }
+      };
     </script>
   </body>
 </html>
