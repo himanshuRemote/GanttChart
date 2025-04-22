@@ -1043,6 +1043,18 @@
             dragover: false
           };
         },
+        watch: {
+          'details.planned': function(val) {
+            if (val && val[0] && val[1] && val[0] > val[1]) {
+              this.details.planned = [val[1], val[0]];
+            }
+          },
+          'details.actual': function(val) {
+            if (val && val[0] && val[1] && val[0] > val[1]) {
+              this.details.actual = [val[1], val[0]];
+            }
+          }
+        },
         computed: {
           plannedText: function () {
             if (!this.details.planned || !this.details.planned[0]) return '';
