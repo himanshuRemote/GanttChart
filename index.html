@@ -735,14 +735,24 @@
             }
           },
           minDate: function () {
+            // Always show at least today to today+30 days
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const defaultMin = today.valueOf();
+            const defaultMax = today.valueOf() + 30 * oneday;
             let md = Math.min(...this.getTaskTime(this.tasks, ['planned', 'actual']));
-            if (md == Infinity) { return (new Date()).valueOf(); }
-            else { return md; }
+            if (md == Infinity) return defaultMin;
+            return Math.min(defaultMin, md);
           },
           maxDate: function () {
+            // Always show at least today to today+30 days
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const defaultMin = today.valueOf();
+            const defaultMax = today.valueOf() + 30 * oneday;
             let md = Math.max(...this.getTaskTime(this.tasks, ['planned', 'actual']));
-            if (md == -Infinity) { return (new Date()).valueOf() + 100*oneday; }
-            else { return md + oneday; }
+            if (md == -Infinity) return defaultMax;
+            return Math.max(defaultMax, md + oneday);
           },
           colLabels: function () {
             let n = Math.ceil((this.maxDate - this.minDate)/oneday);
