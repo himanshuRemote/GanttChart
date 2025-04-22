@@ -195,6 +195,7 @@
                       style="border: 1px solid #ddd; border-left: 0px; border-top: 0px; background-color: white"
                       :edit-mode="settings.editMode"
                       :value="getTaskFromId(taskId)"
+                      :all-tasks="tasks"
                       @input="setTaskFromId(taskId,$event)"
                       @remove="removeTaskWithId(taskId)"
                       @dragstart="startDragTask($event,taskId)"
@@ -223,14 +224,55 @@
             <v-row no-gutters>
               <v-col style="overflow: auto;">
                 <v-row no-gutters class="flex-nowrap" style="height: 40px;" v-for="cl,i in colLabels" v-if="settings.dateDisplay.includes(i)" :style="{ width: (settings.columnWidth * numberOfColumn) + 'px'}" :key="i">
-                  <v-col cols="auto" class="d-flex" v-for="c,j in cl" :key="j" style="border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; background-color: white; min-width: 0;"  :style="{ width: (settings.columnWidth * c.count) + 'px'  }">
+                  <v-col cols="auto" class="d-flex" v-for="c,j in cl" :key="j"
+                    :style="Object.assign({
+                      borderRight: '1px solid #ddd',
+                      borderBottom: '1px solid #ddd',
+                      backgroundColor: 'white',
+                      minWidth: 0,
+                      width: (settings.columnWidth * c.count) + 'px'
+                    }, (i === 2 && isTodayDateCell(j, cl)) ? {
+                      background: 'rgba(255, 235, 59, 0.25)',
+                      borderLeft: '2px solid #FFC107',
+                      borderRight: '2px solid #FFC107',
+                      boxSizing: 'border-box',
+                      zIndex: 2
+                    } : {})">
                     <v-row no-gutters justify="center" align="center" style="max-width: 100%" :title="c.value">
-                      <v-col cols="auto" class="text-no-wrap text-truncate" style="min-width: 0;">{{ c.value }}</v-col>
+                      <v-col cols="auto" class="text-no-wrap text-truncate" style="min-width: 0;">
+                        {{ c.value }}
+                      </v-col>
                     </v-row>
                   </v-col>
                 </v-row>
                 <v-row no-gutters :style="{ width: (settings.columnWidth * numberOfColumn) + 'px' }">
-                  <v-col cols="0" :style="{ height: (settings.rowHeight * taskToDisplay.length) + 'px' }" class="d-flex flex-column">
+                  <v-col cols="0" :style="{ height: (settings.rowHeight * taskToDisplay.length) + 'px', position: 'relative' }" class="d-flex flex-column">
+                    <!-- Highlight today column -->
+                    <div v-if="todayColumnIndex !== -1" :style="{
+                      position: 'absolute',
+                      left: (todayColumnIndex * settings.columnWidth) + 'px',
+                      top: 0,
+                      width: settings.columnWidth + 'px',
+                      height: (settings.rowHeight * taskToDisplay.length) + 'px',
+                      background: 'rgba(255, 235, 59, 0.25)',
+                      zIndex: 1,
+                      pointerEvents: 'none',
+                      borderLeft: '2px solid #FFC107',
+                      borderRight: '2px solid #FFC107',
+                      boxSizing: 'border-box'
+                    }"></div>
+                    <!-- SVG for dependency arrows -->
+                    <svg :width="settings.columnWidth * numberOfColumn" :height="settings.rowHeight * taskToDisplay.length" style="position:absolute;top:0;left:0;z-index:2;pointer-events:none;" v-if="dependencyArrows.length">
+                      <g v-for="(arrow, idx) in dependencyArrows" :key="idx">
+                        <line :x1="arrow.x1" :y1="arrow.y1" :x2="arrow.x2" :y2="arrow.y2" stroke="#009688" stroke-width="2" marker-end="url(#arrowhead)" />
+                      </g>
+                      <defs>
+                        <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+                          <path d="M0,0 L8,4 L0,8 Z" fill="#009688" />
+                        </marker>
+                      </defs>
+                    </svg>
+                    <!-- Task rows -->
                     <v-row no-gutters class="flex-nowrap" style="position: relative;" v-for="taskId,m in taskToDisplay" :key="m">
                       <v-col cols="0" class="d-flex" v-for="cl,i in numberOfColumn" :key="i" style="border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; background-color: white">
                         <v-row no-gutters justify="center" align="center">
@@ -238,9 +280,9 @@
                         </v-row>
                       </v-col>
                       <!-- Planned bar -->
-                      <v-card class="d-flex align-self-center" outlined tile height="80%" :min-width="getBarWidth(taskId, 'planned') + 'px'" style="position:absolute;" :style="{left: getDatePos(taskId, 'planned')+'px', 'background-color': colorList[(taskId[taskId.length-1])%colorList.length], opacity: 0.7}"></v-card>
+                      <v-card class="d-flex align-self-center" outlined tile height="80%" :min-width="getBarWidth(taskId, 'planned') + 'px'" style="position:absolute;z-index:3;" :style="{left: getBarLeft(taskId, 'planned')+'px', 'background-color': colorList[(taskId[taskId.length-1])%colorList.length], opacity: 0.7}"></v-card>
                       <!-- Actual bar -->
-                      <v-card v-if="getBarWidth(taskId, 'actual') > 0" class="d-flex align-self-center" outlined tile height="40%" :min-width="getBarWidth(taskId, 'actual') + 'px'" style="position:absolute;" :style="{left: getDatePos(taskId, 'actual')+'px', 'background-color': '#607D8B', opacity: 0.9, top: '40%'}"></v-card>
+                      <v-card v-if="getBarWidth(taskId, 'actual') > 0" class="d-flex align-self-center" outlined tile height="40%" :min-width="getBarWidth(taskId, 'actual') + 'px'" style="position:absolute;z-index:3;" :style="{left: getBarLeft(taskId, 'actual')+'px', 'background-color': '#607D8B', opacity: 0.9, top: '40%'}"></v-card>
                     </v-row>    
                   </v-col>
                 </v-row>
@@ -414,7 +456,18 @@
           <v-row no-gutters align="center" class="flex-nowrap">
             <v-col cols="auto" v-if="editMode" class="pl-1"><v-icon>mdi-cursor-move</v-icon></v-col>
             <v-col cols="0" class="pl-1 pr-1 text-no-wrap text-truncate" :title="value.description">
-              <slot v-bind:value="value"><v-icon v-if="value.subtasks.length>0" @click.stop="value.collapsed = !value.collapsed">{{ value.collapsed ? 'mdi-chevron-right' : 'mdi-chevron-down' }}</v-icon>{{ value.name }}</slot>
+              <slot v-bind:value="value">
+                <v-icon v-if="value.subtasks.length>0" @click.stop="value.collapsed = !value.collapsed">{{ value.collapsed ? 'mdi-chevron-right' : 'mdi-chevron-down' }}</v-icon>
+                {{ value.name }}
+                <v-tooltip v-if="value.dependencies && value.dependencies.length" bottom>
+                  <template v-slot:activator="{ on, attrs }">
+                    <v-icon small color="primary" class="ml-1" v-bind="attrs" v-on="on">mdi-link</v-icon>
+                  </template>
+                  <span>
+                    Depends on: {{ dependencyNames.join(', ') }}
+                  </span>
+                </v-tooltip>
+              </slot>
             </v-col>
             <v-col cols="auto"><v-btn icon small v-if="editMode" @click.stop="$emit('remove')"><v-icon>mdi-minus</v-icon></v-col>
           </v-row>
@@ -494,6 +547,22 @@
                         <v-btn x-small text color="red" class="ml-2" @click="details.actual = ['', '']">Clear</v-btn>
                       </v-col>
                     </v-row>
+                  </v-col>
+                </v-row>
+                <v-row no-gutters class="mb-4">
+                  <v-col>
+                    <v-select
+                      v-model="details.dependencies"
+                      :items="availableDependencies"
+                      item-text="name"
+                      item-value="id"
+                      label="Dependencies"
+                      multiple
+                      chips
+                      clearable
+                      hint="Select tasks this task depends on"
+                      persistent-hint
+                    ></v-select>
                   </v-col>
                 </v-row>
                 <v-row no-gutters><v-col class="font-weight-black">Subtasks</v-col></v-row>
@@ -717,6 +786,65 @@
               }, []).filter(val => val.length != 0);
             };
             return getTaskToDisplay(this.tasks, []);
+          },
+          todayColumnIndex() {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const n = Math.ceil((this.maxDate - this.minDate)/oneday);
+            for (let i = 0; i < n; i++) {
+              const colDate = new Date(this.minDate + i*oneday);
+              colDate.setHours(0,0,0,0);
+              if (colDate.getTime() === today.getTime()) return i;
+            }
+            return -1;
+          },
+          dependencyArrows() {
+            const arrows = [];
+            const barTops = {};
+            this.taskToDisplay.forEach((taskId, idx) => {
+              const task = this.getTaskFromId(taskId);
+              const barLeft = this.getBarLeft(taskId, 'planned');
+              const barWidth = this.getBarWidth(taskId, 'planned');
+              barTops[this._taskIdStr(taskId)] = {
+                x: barLeft + barWidth,
+                y: idx * this.settings.rowHeight + this.settings.rowHeight * 0.4
+              };
+            });
+            this.taskToDisplay.forEach((taskId, idx) => {
+              const task = this.getTaskFromId(taskId);
+              if (task.dependencies && task.dependencies.length) {
+                task.dependencies.forEach(depId => {
+                  const depIdx = this._findTaskIdxById(depId);
+                  if (depIdx !== -1) {
+                    const depTaskId = this.taskToDisplay[depIdx];
+                    const depBarLeft = this.getBarLeft(depTaskId, 'planned');
+                    const depBarWidth = this.getBarWidth(depTaskId, 'planned');
+                    const from = {
+                      x: depBarLeft + depBarWidth,
+                      y: depIdx * this.settings.rowHeight + this.settings.rowHeight * 0.4
+                    };
+                    const to = {
+                      x: this.getBarLeft(taskId, 'planned'),
+                      y: idx * this.settings.rowHeight + this.settings.rowHeight * 0.4
+                    };
+                    arrows.push({ x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+                  }
+                });
+              }
+            });
+            return arrows;
+          },
+          isTodayDateCell() {
+            return (j, cl) => {
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              let colIdx = 0;
+              for (let k = 0; k < cl.length; k++) {
+                if (k === j) break;
+                colIdx += cl[k].count;
+              }
+              return this.todayColumnIndex >= colIdx && this.todayColumnIndex < colIdx + cl[j].count;
+            };
           }
         },
         data: function () {
@@ -754,7 +882,8 @@
               planned: [],
               actual: [],
               subtasks: [],
-              collapsed: true
+              collapsed: true,
+              dependencies: []
             });
             this.emitInput();
           },
@@ -798,6 +927,17 @@
             let curRange = [(new Date(dateRange[0])).valueOf(), (new Date(dateRange[1])).valueOf() + oneday];
             return (curRange[1] - curRange[0]) / (this.maxDate - this.minDate) * (this.settings.columnWidth*this.numberOfColumn);
           },
+          getBarLeft(taskId, key) {
+            let task;
+            taskId.forEach((id, i) => {
+              if (i == 0) { task = this.tasks[id]; }
+              else { task = task.subtasks[id]; }
+            });
+            let date = (task[key] && task[key][0]) ? task[key][0] : null;
+            if (!date) return 0;
+            let curDate = (new Date(date).valueOf());
+            return (curDate - this.minDate) / (this.maxDate - this.minDate) * (this.settings.columnWidth*this.numberOfColumn);
+          },
           getTaskId: function (taskId) {
             return taskId.map(x => x+1).join('.');
           },
@@ -820,6 +960,7 @@
             task.name = event.name;
             task.planned = event.planned;
             task.subtasks = event.subtasks;
+            task.dependencies = event.dependencies;
             this.emitInput();
           },
           removeTaskWithId: function (taskId) {
@@ -876,6 +1017,15 @@
             let droppedId = ev.dataTransfer.getData('taskId');
             let thisId = JSON.stringify(taskId);
             if (droppedId != thisId) { this.$emit('reorder-task', [droppedId, thisId]); }
+          },
+          _taskIdStr(taskId) {
+            return taskId.join('-');
+          },
+          _findTaskIdxById(depId) {
+            for (let i = 0; i < this.taskToDisplay.length; i++) {
+              if (this._taskIdStr(this.taskToDisplay[i]) === depId) return i;
+            }
+            return -1;
           }
         }
       });
@@ -1024,7 +1174,7 @@
 
       Vue.component('task-title', {
         template: '#task-title',
-        props: ['value', 'editMode'],
+        props: ['value', 'editMode', 'allTasks'],
         mounted: function () {
           this.$el.addEventListener("drag", (ev) => { this.$emit('drag', ev); });
           this.$el.addEventListener("dragstart", (ev) => { this.$emit('dragstart', ev); });
@@ -1064,16 +1214,60 @@
             if (!this.details.actual || !this.details.actual[0]) return '';
             return this.details.actual[0] + ' ~ ' + this.details.actual[1];
           },
-          additionalClass: function () { return this.dragover ? ['teal', 'lighten-5'] : [] }
+          additionalClass: function () { return this.dragover ? ['teal', 'lighten-5'] : [] },
+          availableDependencies() {
+            const flatten = (tasks, path = []) => {
+              let arr = [];
+              tasks.forEach((t, i) => {
+                const id = [...path, i].join('-');
+                if (this.details && this.details._internalId !== id) {
+                  arr.push({ name: t.name, id });
+                }
+                if (t.subtasks && t.subtasks.length > 0) {
+                  arr = arr.concat(flatten(t.subtasks, [...path, i]));
+                }
+              });
+              return arr;
+            };
+            return flatten(this.allTasks || []);
+          },
+          dependencyNames() {
+            if (!this.value.dependencies || !this.value.dependencies.length) return [];
+            const findName = (id, tasks, path = []) => {
+              let parts = id.split('-').map(Number);
+              let t = tasks;
+              let task = null;
+              for (let i = 0; i < parts.length; i++) {
+                if (!t[parts[i]]) return null;
+                task = t[parts[i]];
+                t = task.subtasks;
+              }
+              return task ? task.name : id;
+            };
+            return this.value.dependencies.map(depId => findName(depId, this.allTasks)).filter(Boolean);
+          }
         },
         methods: {
           openDetails: function () { 
             if (this.isOpened == false) {
               this.isOpened = true; 
               this.details = JSON.parse(JSON.stringify(this.value));
+              this.details._internalId = this._getTaskId(this.value, this.allTasks);
             }
           },
+          _getTaskId(task, tasks, path = []) {
+            for (let i = 0; i < (tasks || []).length; i++) {
+              if (tasks[i] === task) return path.concat(i).join('-');
+              if (tasks[i].subtasks && tasks[i].subtasks.length > 0) {
+                const sub = this._getTaskId(task, tasks[i].subtasks, path.concat(i));
+                if (sub) return sub;
+              }
+            }
+            return null;
+          },
           confirmChanges: function () {
+            if (this.details._internalId) delete this.details._internalId;
+            this.details.dependencies = (this.details.dependencies || []).filter(dep => dep !== this._getTaskId(this.value, this.allTasks));
             this.$emit('input', this.details);
           },
           addNewSubtask: function () {
@@ -1083,7 +1277,8 @@
               planned: [startDay, endDay],
               actual: [startDay, endDay],
               subtasks: [],
-              collapsed: true
+              collapsed: true,
+              dependencies: []
             });
           },
           removeSubtask: function (i) {
@@ -1093,7 +1288,6 @@
           dropSubTask: function (ev, taskId) { 
             let droppedId = ev.dataTransfer.getData('taskId');
             let thisId = JSON.stringify(taskId);
-            // console.log(droppedId, thisId);
             let taskToMove = this.details.subtasks.splice(droppedId,1)[0];
             if (droppedId >= thisId) { this.details.subtasks.splice(thisId,0,taskToMove); }
             else { this.details.subtasks.splice(thisId-1,0,taskToMove); }
@@ -1283,12 +1477,12 @@
                   taskIdToPrepend[movel - 1] -= 1;
                   let parentOfTaskToPrepend = getParentOfTaskToPrepend(taskIdToPrepend.slice(0,-1));
                   parentOfTaskToPrepend.splice(taskIdToPrepend[prepl - 1], 0, taskToMove); 
-                } else { // taskIdToMove[movel - 1] == taskIdToPrepend[movel - 1]
+                } else { 
                   let parentOfTaskToPrepend = getParentOfTaskToPrepend(taskIdToMove.slice(0,-1));
                   parentOfTaskToPrepend.splice(taskIdToMove[movel - 1], 0, taskToMove);
                 }
               }
-            } else { // movel > prepl
+            } else { 
               let parentOfTaskToPrepend = getParentOfTaskToPrepend(taskIdToPrepend.slice(0,-1));
               parentOfTaskToPrepend.splice(taskIdToPrepend[prepl - 1], 0, taskToMove); 
             }
@@ -1311,7 +1505,6 @@
           dropGanttListItem: function (ev, ganttId) { 
             let droppedId = ev.dataTransfer.getData('ganttId');
             let thisId = JSON.stringify(ganttId);
-            // console.log(droppedId, thisId);
             let ganttToMove = this.gantts.splice(droppedId,1)[0];
             if (droppedId >= thisId) { this.gantts.splice(thisId,0,ganttToMove); }
             else { this.gantts.splice(thisId-1,0,ganttToMove); }
