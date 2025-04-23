@@ -853,7 +853,7 @@
               rowHeight: 40,
               columnWidth: 28,
               dateDisplay: [0,1,2],
-              editMode: true
+              editMode: false
             },
             tasks: [],
             reorderDialog: false
@@ -1042,7 +1042,7 @@
             customPanel: null,
             rowHeight: 40,
             columnWidth: 40,
-            editMode: true
+            editMode: false
           }
         },
         methods: {
@@ -1335,11 +1335,19 @@
               rowHeight: 40,
               columnWidth: 40,
               dateDisplay: [0,1,2],
-              tasks: []
+              tasks: [],
+              editMode: false
             };
           },
           addNewGantt: function () {
-            this.gantts.push(this.getNewGantt());
+            this.gantts.push({
+              ...this.getNewGantt(),
+              editMode: false
+            });
+            this.saveToLocalStorage();
+          },
+          toggleEditMode: function (ganttIndex) {
+            this.gantts[ganttIndex].editMode = !this.gantts[ganttIndex].editMode;
             this.saveToLocalStorage();
           },
           newInOld: function () {
